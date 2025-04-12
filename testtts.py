@@ -1,58 +1,73 @@
-import pyttsx3
-from docx import Document
 import os
+import subprocess
+from docx import Document
 
-# 1. Load the Word document
+# 1. Convert AIFF to MP3
+def convert_to_mp3(aiff_file, mp3_file):
+    subprocess.run(["ffmpeg", "-y", "-i", aiff_file, mp3_file])
+
+# 2. Read DOCX
 def read_docx(file_path):
     doc = Document(file_path)
     full_text = []
     for para in doc.paragraphs:
-        if para.text.strip():  # Ignore empty lines
+        if para.text.strip():
             full_text.append(para.text.strip())
     return '\n'.join(full_text)
 
-# 2. Split the text into smaller chunks
-def split_text(text, max_length=5000):
+# 3. Split Text with Natural Breaks
+def split_text(text, max_length=3000):
     paragraphs = text.split('\n')
     chunks, current_chunk = [], ""
 
     for para in paragraphs:
+        if para.strip():
+            para += " "
+            # Add artificial pause (period + double newline)
+            para = para.strip() + ".\n\n"
         if len(current_chunk) + len(para) < max_length:
-            current_chunk += para + '\n'
+            current_chunk += para
         else:
             chunks.append(current_chunk.strip())
-            current_chunk = para + '\n'
+            current_chunk = para
     if current_chunk:
         chunks.append(current_chunk.strip())
     return chunks
 
-# 3. Convert text chunks to speech
-def text_to_speech_offline(text_chunks, output_prefix="audiobook_part"):
-    engine = pyttsx3.init()
-    engine.setProperty('rate', 125)       # Adjust speed here
-    engine.setProperty('volume', 1.0)
-
-    # Choose a voice (0 = male, 1 = female)
-    voices = engine.getProperty('voices')
-    engine.setProperty('voice', voices[1].id)
+# 4. Convert to Speech with Better Voice Handling
+def save_with_say(text_chunks, output_folder="output", output_prefix="audiobook_part", voice="Moira"):
+    os.makedirs(output_folder, exist_ok=True)
 
     for idx, chunk in enumerate(text_chunks):
-        output_file = f"{output_prefix}{idx+1}.mp3"
-        print(f"🔊 Saving part {idx+1} as {output_file}...")
-        engine.save_to_file(chunk, output_file)
-        engine.runAndWait()
+        aiff_path = os.path.join(output_folder, f"{output_prefix}{idx+1}.aiff")
+        mp3_path = os.path.join(output_folder, f"{output_prefix}{idx+1}.mp3")
+        temp_txt_path = os.path.join(output_folder, "temp.txt")
 
-    engine.stop()
-    print("✅ Audiobook conversion complete!")
+        # Save chunk to temp file for better punctuation handling
+        with open(temp_txt_path, "w") as f:
+            f.write(chunk)
 
-# 4. Main function
+        # Use 'say' to read from file
+        subprocess.run(["say", "-v", voice, "-o", aiff_path, "-f", temp_txt_path])
+
+        # Convert to MP3
+        convert_to_mp3(aiff_path, mp3_path)
+        print(f"🗣️ Saved part {idx+1} as {mp3_path}")
+
+        # Cleanup
+        os.remove(aiff_path)
+        os.remove(temp_txt_path)
+
+# 5. Main Flow
 if __name__ == "__main__":
-    docx_path = "novel.docx"  # Replace with your file path
+    docx_path = "novel.docx"  # Replace with your actual file
     print("📖 Reading the document...")
     full_text = read_docx(docx_path)
 
-    print("✂️ Splitting text into chunks...")
-    chunks = split_text(full_text, max_length=5000)
+    print("✂️ Splitting text into chunks with natural pauses...")
+    chunks = split_text(full_text, max_length=3000)
 
-    print("🎙️ Converting text to speech...")
-    text_to_speech_offline(chunks)
+    print("🎙️ Converting text to speech using macOS 'say'...")
+    save_with_say(chunks)
+
+    print("✅ Audiobook conversion complete using macOS TTS!")
