@@ -2,6 +2,8 @@ import os
 import subprocess
 from docx import Document
 
+# need to install ffmpeg and python-docx
+
 # 1. Convert AIFF to MP3
 def convert_to_mp3(aiff_file, mp3_file):
     subprocess.run(["ffmpeg", "-y", "-i", aiff_file, mp3_file])
@@ -16,7 +18,7 @@ def read_docx(file_path):
     return '\n'.join(full_text)
 
 # 3. Split Text with Natural Breaks
-def split_text(text, max_length=3000):
+def split_text(text, max_length=1000):
     paragraphs = text.split('\n')
     chunks, current_chunk = [], ""
 
@@ -42,10 +44,12 @@ def save_with_say(text_chunks, output_folder="output", output_prefix="audiobook_
         aiff_path = os.path.join(output_folder, f"{output_prefix}{idx+1}.aiff")
         mp3_path = os.path.join(output_folder, f"{output_prefix}{idx+1}.mp3")
         temp_txt_path = os.path.join(output_folder, "temp.txt")
+        # Slow down the speech rate
+        slowed_chunk = f"[[rate 140]]{chunk}"
 
         # Save chunk to temp file for better punctuation handling
         with open(temp_txt_path, "w") as f:
-            f.write(chunk)
+            f.write(slowed_chunk)
 
         # Use 'say' to read from file
         subprocess.run(["say", "-v", voice, "-o", aiff_path, "-f", temp_txt_path])
@@ -60,12 +64,12 @@ def save_with_say(text_chunks, output_folder="output", output_prefix="audiobook_
 
 # 5. Main Flow
 if __name__ == "__main__":
-    docx_path = "novel.docx"  # Replace with your actual file
+    docx_path = "novel.docx"  
     print("📖 Reading the document...")
     full_text = read_docx(docx_path)
 
     print("✂️ Splitting text into chunks with natural pauses...")
-    chunks = split_text(full_text, max_length=3000)
+    chunks = split_text(full_text, max_length=1000)
 
     print("🎙️ Converting text to speech using macOS 'say'...")
     save_with_say(chunks)
